@@ -1,0 +1,4 @@
+scripts_dir:
+  - $process_dir/templates
+templates_dir:
+  - $process_dir/scripts
