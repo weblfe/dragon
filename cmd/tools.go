@@ -4,6 +4,9 @@ import (
 	"github.com/spf13/cobra"
 	tools2 "github.com/weblfe/dragon/pkg/tools"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -44,11 +47,56 @@ func (r *tools) init() {
 	if r.cmd.Run == nil {
 		r.cmd.Run = r.run
 	}
+	if r.cmd.PreRun == nil {
+		r.cmd.PreRun = r.Check
+	}
+}
+
+func (r *tools) Check(_ *cobra.Command, _ []string) {
+	root := os.Getenv("GOROOT")
+	_path := os.Getenv("GOPATH")
+	if !strings.Contains(root, string(filepath.Separator)) {
+		root = strings.ReplaceAll(root, "/", string(filepath.Separator))
+	}
+	if !strings.Contains(_path, string(filepath.Separator)) {
+		_path = strings.ReplaceAll(_path, "/", string(filepath.Separator))
+	}
+	log.Printf("GOROOT: %s\n", root)
+	log.Printf("GOPATH: %s\n", _path)
+	if root == _path && root != "" {
+		_path = filepath.Join(filepath.Dir(root), "go_path")
+		if _, err := os.Stat(_path); os.IsNotExist(err) {
+			err = os.MkdirAll(_path, os.ModePerm)
+			panic(err)
+		}
+		_ = os.Setenv("GOPATH", _path)
+	}
+}
+
+func (r *tools) parseArgs(args []string) map[string]string {
+	var kvs = Kvs{}
+	for _, v := range args {
+		if !strings.Contains(v, "=") {
+			kvs[v] = ""
+			continue
+		}
+		values := strings.SplitN(v, "=", 2)
+		kvs[values[0]] = values[1]
+	}
+	return kvs
 }
 
 func (r *tools) run(_ *cobra.Command, args []string) {
 	log.Printf("args - %v \n", args)
-	devOps := tools2.NewDevops(Kvs{"GOROOT": goRoot, "GOPATH": goPath})
+	kvs := r.parseArgs(args)
+	kvs["GOROOT"] = goRoot
+	kvs["GOPATH"] = goPath
+	devOps := tools2.NewDevops(kvs)
+	// 罗列支持安装的工具列表
+	if _, ok := kvs["lists"]; ok {
+		devOps.Lists()
+		return
+	}
 	stdout, stderr, err := devOps.Exec()
 	if err != nil {
 		log.Printf("[ERROR] %v\n", err)
